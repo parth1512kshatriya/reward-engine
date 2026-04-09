@@ -53,6 +53,12 @@ function getTodayISTTime(hour, minute = 0) {
     return ist.getTime();
 }
 
+function getNowIST() {
+    return new Date(
+        new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+    ).getTime();
+}
+
 function getWeeklyWindow10k() {
     const now = new Date();
 
@@ -71,7 +77,7 @@ function getWeeklyWindow10k() {
     sunday.setDate(monday.getDate() + 6);
     sunday.setHours(23, 30, 0, 0);
 
-    const nowTime = ist.getTime();
+   const nowTime = getNowIST();
 
     if (nowTime > sunday.getTime()) {
         monday.setDate(monday.getDate() + 7);
@@ -89,13 +95,13 @@ function getWeeklyWindow10k() {
 }
 
 function getCompetitionWindow250() {
-    const now = Date.now();
+    const now = getNowIST();
 
-    const startMorning = getTodayISTTime(8);
-    const endMorning = getTodayISTTime(14);
+    const startMorning = getTodayISTTime(8, 0);
+    const endMorning = getTodayISTTime(14, 0);
 
-    const startEvening = getTodayISTTime(15);
-    const endEvening = getTodayISTTime(21);
+    const startEvening = getTodayISTTime(15, 0);
+    const endEvening = getTodayISTTime(21, 0);
 
     if (now >= startMorning && now < endMorning) {
         return { active: true, start: startMorning, end: endMorning };
@@ -105,15 +111,24 @@ function getCompetitionWindow250() {
         return { active: true, start: startEvening, end: endEvening };
     }
 
+    if (now >= endMorning && now < startEvening) {
+        return {
+            active: false,
+            start: startMorning,
+            end: endMorning,
+            isResultTime: true
+        };
+    }
+
     if (now < startMorning) {
         return { active: false, start: startMorning, end: endMorning };
     }
 
-    if (now >= endMorning && now < startEvening) {
-        return { active: false, start: startMorning, end: endMorning };
-    }
-
-    return { active: false, start: startEvening, end: endEvening };
+    return {
+        active: false,
+        start: getTodayISTTime(8, 0) + 24 * 60 * 60 * 1000,
+        end: getTodayISTTime(14, 0) + 24 * 60 * 60 * 1000
+    };
 }
 
 function parseCustomDate(dateStr) {
@@ -648,7 +663,7 @@ async function saveResults(type, users, endTime) {
 
         if (!userSnap.exists()) {
             console.log("⏩ Skipping missing user:", user.userId);
-            continue;
+            continue; 
         }
 
         const resultKey = String(endTime);
@@ -729,7 +744,7 @@ async function processRewards() {
             const resultTime = Number(config._10K_CompetitionResultID);
             const resetTime = resultTime + (60 * 60 * 1000);
 
-            if (Date.now() >= resetTime) {
+            if (getNowIST() >= resetTime) {
 
                 // Clear result ID
                 await db.ref("Game-Config").update({
@@ -758,7 +773,7 @@ async function processRewards() {
             const resultTime = Number(config._250rs_CompetitionResultID);
             const resetTime = resultTime + (60 * 60 * 1000);
 
-            if (Date.now() >= resetTime) {
+            if (getNowIST() >= resetTime) {
 
                 // Clear result ID
                 await db.ref("Game-Config").update({
@@ -786,12 +801,11 @@ async function processRewards() {
         const window250 = getCompetitionWindow250();
         const window10k = getWeeklyWindow10k();
 
-        const new10kStart = new Date(window10k.start).toISOString();
-        const new10kDuration = (window10k.end - window10k.start) / 1000;
+      const new10kStart = new Date(window10k.start - (5.5 * 60 * 60 * 1000)).toISOString();
+const new10kDuration = (window10k.end - window10k.start) / 1000;
 
-        const new250Start = new Date(window250.start).toISOString();
-        const new250Duration = (window250.end - window250.start) / 1000;
-
+const new250Start = new Date(window250.start - (5.5 * 60 * 60 * 1000)).toISOString();
+const new250Duration = (window250.end - window250.start) / 1000;
         // if (
         //     config._10kCompetitionStartingTime !== new10kStart ||
         //     config._10kCompetitionTotalTime !== new10kDuration ||
@@ -812,28 +826,22 @@ async function processRewards() {
         //     console.log("🔥 Firebase updated");
         // }
 
-        const isAnyCompetitionActive = window250.active || window10k.active;
+        const isAnyCompetitionActive =
+    window250.active || window10k.active;
 
-        if (
-            config._10kCompetitionStartingTime !== new10kStart ||
-            config._10kCompetitionTotalTime !== new10kDuration ||
-            config._250rsCompetitionStartingTime !== new250Start ||
-            config._250rsCompetitionTotalTime !== new250Duration
-        ) {
-            await db.ref("Game-Config").update({
-                _10kCompetitionStartingTime: new10kStart,
-                _10kCompetitionTotalTime: new10kDuration,
+await db.ref("Game-Config").update({
+    _10kCompetitionStartingTime: new10kStart,
+    _10kCompetitionTotalTime: new10kDuration,
 
-                _250rsCompetitionStartingTime: new250Start,
-                _250rsCompetitionTotalTime: new250Duration,
-            });
+    _250rsCompetitionStartingTime: new250Start,
+    _250rsCompetitionTotalTime: new250Duration,
+});
 
-            console.log("🔥 Time config updated");
-        }
+console.log("🔥 Time config FORCE updated");
 
-        await db.ref("Game-Config").update({
-            isCompetitionActive: isAnyCompetitionActive
-        });
+await db.ref("Game-Config").update({
+    isCompetitionActive: isAnyCompetitionActive
+});
 
         // Logs
         console.log("10K Active:", window10k.active);
@@ -845,14 +853,14 @@ async function processRewards() {
         const start250 = window250.start;
         const end250 = window250.end;
 
-        const now = Date.now();
+        const now = getNowIST();
 
         const delay250 = end250 - now;
         const delay10k = end10k - now;
 
         //  HANDLE MISSED INSTANT EXECUTION (CRITICAL FIX)
 
-        if (delay10k <= 0 && delay10k > -60000 && !timerSet10k) {
+        if (delay10k <= 0 && delay10k > -300000 && !timerSet10k) {
             console.log("⚡ Missed 10K exact timing → running instantly");
 
             timerSet10k = true;
@@ -882,7 +890,7 @@ async function processRewards() {
             })();
         }
 
-        if (delay250 <= 0 && delay250 > -60000 && !timerSet250) {
+        if (delay250 <= 0 && delay250 > -300000 && !timerSet250) {
             console.log("⚡ Missed 250 timing → running instantly");
 
             timerSet250 = true;
@@ -975,7 +983,7 @@ async function processRewards() {
         const is10000Done =
             now >= end10k &&
             now <= end10k + (5 * 60 * 1000); // 5 min window for weekly safety
-        const is250Done = now >= end250 && now <= end250 + 60000;
+        const is250Done = now >= end250 && now <= end250 + (5 * 60 * 1000);
 
         console.log("NOW:", new Date(now).toLocaleString());
         console.log("END 10K:", new Date(end10k).toLocaleString());
@@ -1069,3 +1077,16 @@ cron.schedule("* * * * *", processRewards);
 
 // run immediately
 processRewards();
+
+const express = require("express");
+const app = express();
+
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+    res.send("Reward Engine Running 🚀");
+});
+
+app.listen(PORT, () => {
+    console.log(`🌐 Server running on port ${PORT}`);
+});
