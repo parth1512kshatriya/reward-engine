@@ -100,31 +100,58 @@ function getCompetitionWindow250() {
     const startEvening = getTodayISTTime(15, 0);
     const endEvening = getTodayISTTime(21, 0);
 
+    const nightResultEnd = getTodayISTTime(22, 0); // 10 PM
+
+    // 🌅 Morning Active (8 AM - 2 PM)
     if (now >= startMorning && now < endMorning) {
-        return { active: true, start: startMorning, end: endMorning };
+        return {
+            active: true,
+            start: startMorning,
+            end: endMorning,
+            isResultTime: false
+        };
     }
 
-    if (now >= startEvening && now < endEvening) {
-        return { active: true, start: startEvening, end: endEvening };
-    }
-
+    // ⏳ Afternoon Result (2 PM - 3 PM)
     if (now >= endMorning && now < startEvening) {
         return {
             active: false,
-            start: startMorning,
-            end: endMorning,
+            start: endMorning,
+            end: startEvening,
             isResultTime: true
         };
     }
 
-    if (now < startMorning) {
-        return { active: false, start: startMorning, end: endMorning };
+    // 🌙 Evening Active (3 PM - 9 PM)
+    if (now >= startEvening && now < endEvening) {
+        return {
+            active: true,
+            start: startEvening,
+            end: endEvening,
+            isResultTime: false
+        };
     }
+
+    // 🌌 Night Result Time (9 PM - 10 PM)
+    if (now >= endEvening && now < nightResultEnd) {
+        return {
+            active: false,
+            start: endEvening,
+            end: nightResultEnd,
+            isResultTime: true
+        };
+    }
+
+    // 🌃 After 10 PM → Reset + wait for next day 8 AM
+    const nextMorningStart = startMorning + 24 * 60 * 60 * 1000;
+    const nextMorningEnd = endMorning + 24 * 60 * 60 * 1000;
 
     return {
         active: false,
-        start: getTodayISTTime(8, 0) + 24 * 60 * 60 * 1000,
-        end: getTodayISTTime(14, 0) + 24 * 60 * 60 * 1000
+        start: nextMorningStart,
+        end: nextMorningEnd,
+        isResultTime: false,
+        isResetTime: true // 🔥 useful for clearing data
     };
 }
 
