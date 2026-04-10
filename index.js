@@ -695,31 +695,47 @@ await db.ref("Game-Config").update({
         const start10k = window10k.start;
         const end10k = window10k.end;
 
-        const start250 = window250.start;
-        const end250 = window250.end;
+        const now = getNowIST();
 
-        const now = getNowIST();  
-        
-        const is250Done = now >= end250;
+const endMorning = getTodayISTTime(14, 0);
+const startEvening = getTodayISTTime(15, 0);
+const endEvening = getTodayISTTime(21, 0);
+const nightEnd = getTodayISTTime(22, 0);
+
+// Result windows
+const isMorningResultTime = now >= endMorning && now < startEvening;
+const isEveningResultTime = now >= endEvening && now < nightEnd;
         const is10000Done = now >= end10k;
-
+console.log("⏰ MorningResult:", isMorningResultTime);
+console.log("⏰ EveningResult:", isEveningResultTime);
         console.log("NOW:", new Date(now).toLocaleString());
         console.log("END 10K:", new Date(end10k).toLocaleString());
-        console.log("END 250:", new Date(end250).toLocaleString());
+      //  console.log("END 250:", new Date(end250).toLocaleString());
         console.log("is10000Done:", is10000Done);
-        console.log("is250Done:", is250Done);
+        //console.log("is250Done:", is250Done);
 
         console.log("10K END:", new Date(end10k).toLocaleString(), is10000Done);
 
-        console.log("250 END:", new Date(end250).toLocaleString(), is250Done);
+      //  console.log("250 END:", new Date(end250).toLocaleString(), is250Done);
 
         // ================= SAFE RESULT EXECUTION =================
 
-if (is250Done) {
+// ================= 250 SAFE =================
 
-    const already250 = await alreadyProcessed("250rs", end250);
+if (isMorningResultTime || isEveningResultTime) {
 
-    console.log("🧠 250 Check → Done:", is250Done, "Processed:", already250);
+    const resultEndTime = isMorningResultTime
+        ? endMorning
+        : endEvening;
+
+    const already250 = await alreadyProcessed("250rs", resultEndTime);
+
+    console.log(
+        "🧠 250 Check → Time:",
+        new Date(resultEndTime).toLocaleString(),
+        "Processed:",
+        already250
+    );
 
     if (!already250) {
 
@@ -742,19 +758,28 @@ if (is250Done) {
             prizeRules250
         );
 
-        await saveResults("250rs", final250, end250);
+        await saveResults("250rs", final250, resultEndTime);
 
-        console.log("✅ 250 RESULT GENERATED (SAFE)");
+        console.log("✅ 250 RESULT GENERATED (FIXED)");
     }
 }
 
-// ================= 10K SAFE =================
+/// ================= 10K SAFE =================
 
-if (is10000Done) {
+const is10kResultTime =
+    now >= end10k &&
+    now < end10k + (60 * 60 * 1000); // 1 hour window
+
+if (is10kResultTime) {
 
     const already10k = await alreadyProcessed("10000rs", end10k);
 
-    console.log("🧠 10K Check → Done:", is10000Done, "Processed:", already10k);
+    console.log(
+        "🧠 10K Check → Time:",
+        new Date(end10k).toLocaleString(),
+        "Processed:",
+        already10k
+    );
 
     if (!already10k) {
 
@@ -779,7 +804,7 @@ if (is10000Done) {
 
         await saveResults("10000rs", final10k, end10k);
 
-        console.log("✅ 10K RESULT GENERATED (SAFE)");
+        console.log("✅ 10K RESULT GENERATED (FINAL FIX)");
     }
 }
 } catch (err) {
