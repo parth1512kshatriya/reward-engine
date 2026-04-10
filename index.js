@@ -38,9 +38,6 @@ const DEFAULT_RULES_250 = [
     { rank: 7, count: 1000, amount: 0.5 }
 ];
 
-let timerSet250 = false;
-let timerSet10k = false;
-
 function getTodayISTTime(hour, minute = 0) {
     const now = new Date();
 
@@ -447,158 +444,6 @@ function assign10000Prizes(users, prizeRules) {
 
     return result;
 }
-
-// function assignRanksAndPrizes(users, prizeRules) {
-//     if (!users.length) return [];
-
-//     const result = [];
-
-//     let i = 0;
-//     let displayRank = 1;
-
-//     const is10k = prizeRules[0].amount === 10000;
-//     const minPoints = is10k ? 7350 : 630; // ✅ updated from Kotlin logic
-
-//     // ✅ CREATE SLOT SYSTEM FOR ₹250
-//     let prizeSlots = [];
-
-//     if (!is10k) {
-//         prizeSlots = [];
-
-//         prizeRules.forEach(rule => {
-//             for (let k = 0; k < rule.count; k++) {
-//                 prizeSlots.push(rule.amount);
-//             }
-//         });
-//     }
-
-//     let currentSlotIndex = 0;
-
-//     while (i < users.length) {
-
-//         // AFTER RANK 6 → SAME LOGIC
-//         if (displayRank > 6) {
-
-//             while (i < users.length) {
-
-//                 const user = users[i];
-
-//                 let prize = 0;
-
-//                 if (user.points >= minPoints) {
-//                     prize = is10k ? 1 : 0.5;
-//                 }
-
-//                 result.push({
-//                     ...user,
-//                     rank: 7,
-//                     prizeAmount: prize
-//                 });
-
-//                 i++;
-//             }
-
-//             break;
-//         }
-
-//         // CREATE TIE GROUP
-//         let j = i;
-//         while (j < users.length && users[j].points === users[i].points) j++;
-
-//         const tieGroup = users.slice(i, j);
-//         const tieCount = tieGroup.length;
-
-//         let perUserPrize = 0;
-
-//         if (is10k) {
-//             // 🔥 KEEP YOUR OLD 10K LOGIC
-//             const currentRule = prizeRules.find(r => r.rank === displayRank);
-
-//             if (!currentRule) {
-//                 tieGroup.forEach(user => {
-//                     result.push({
-//                         ...user,
-//                         rank: displayRank,
-//                         prizeAmount: 0
-//                     });
-//                 });
-
-//                 displayRank++;
-//                 i = j;
-//                 continue;
-//             }
-
-//             if (tieCount === 1) {
-//                 perUserPrize = currentRule.amount;
-//             } else {
-//                 let totalPool = 0;
-
-//                 for (let r = displayRank; r <= 7; r++) {
-//                     const rule = prizeRules.find(x => x.rank === r);
-//                     if (rule) totalPool += rule.amount;
-//                 }
-
-//                 perUserPrize = totalPool / tieCount;
-//             }
-
-//         } else {
-//             // ✅ ₹250 SLOT-BASED LOGIC (FROM YOUR KOTLIN)
-
-//             let totalPrize = 0;
-
-//             if (currentSlotIndex >= prizeSlots.length) {
-
-//                 const TOTAL_POOL = prizeSlots.reduce((sum, val) => sum + val, 0);
-//                 perUserPrize = TOTAL_POOL / tieCount;
-
-//             } else if (currentSlotIndex + tieCount > prizeSlots.length) {
-
-//                 const TOTAL_POOL = prizeSlots.reduce((sum, val) => sum + val, 0);
-//                 perUserPrize = TOTAL_POOL / tieCount;
-
-//             } else {
-
-//                 for (let k = 0; k < tieCount; k++) {
-//                     totalPrize += prizeSlots[currentSlotIndex + k];
-//                 }
-
-//                 perUserPrize = totalPrize / tieCount;
-//             }
-//         }
-
-//         // ASSIGN
-//         for (let user of tieGroup) {
-
-//             const isQualified = user.points >= minPoints;
-
-//             let prize = 0;
-
-//             if (isQualified) {
-//                 if (displayRank === 7) {
-//                     prize = is10k ? 1 : 0.5;
-//                 } else {
-//                     prize = parseFloat(perUserPrize.toFixed(4)); // Kotlin precision
-//                 }
-//             }
-
-//             result.push({
-//                 ...user,
-//                 rank: displayRank,
-//                 prizeAmount: prize
-//             });
-//         }
-
-//         if (!is10k) {
-//             currentSlotIndex += tieCount; // ✅ IMPORTANT
-//         }
-
-//         displayRank++;
-//         i = j;
-//     }
-
-//     return result;
-// }
-
 // prevent duplicate results
 
 async function alreadyProcessed(type, endTime) {
@@ -853,137 +698,10 @@ await db.ref("Game-Config").update({
         const start250 = window250.start;
         const end250 = window250.end;
 
-        const now = getNowIST();
-
-        const delay250 = end250 - now;
-        const delay10k = end10k - now;
-
-        //  HANDLE MISSED INSTANT EXECUTION (CRITICAL FIX)
-
-        if (delay10k <= 0 && delay10k > -300000 && !timerSet10k) {
-            console.log("⚡ Missed 10K exact timing → running instantly");
-
-            timerSet10k = true;
-
-            (async () => {
-                const { users10000 } = await getAllUsers(groups);
-
-                if (users10000.length) {
-                    let prizeRules10k;
-
-                    try {
-                        prizeRules10k = await getPrizeRules("10000");
-                    } catch {
-                        prizeRules10k = DEFAULT_RULES_10000;
-                    }
-
-                    prizeRules10k.sort((a, b) => a.rank - b.rank);
-
-                    const final10k = assign10000Prizes(sortUsers(users10000), prizeRules10k);
-
-                    if (!(await alreadyProcessed("10000rs", end10k))) {
-                        await saveResults("10000rs", final10k, end10k);
-                    }
-                }
-
-                timerSet10k = false;
-            })();
-        }
-
-        if (delay250 <= 0 && delay250 > -300000 && !timerSet250) {
-            console.log("⚡ Missed 250 timing → running instantly");
-
-            timerSet250 = true;
-
-            (async () => {
-                const { users250 } = await getAllUsers(groups);
-
-                if (users250.length) {
-                    let prizeRules250;
-
-                    try {
-                        prizeRules250 = await getPrizeRules("250");
-                    } catch {
-                        prizeRules250 = DEFAULT_RULES_250;
-                    }
-
-                    prizeRules250.sort((a, b) => a.rank - b.rank);
-
-                    const final250 = assign250Prizes(sortUsers(users250), prizeRules250);
-
-                    if (!(await alreadyProcessed("250rs", end250))) {
-                        await saveResults("250rs", final250, end250);
-                    }
-                }
-
-                timerSet250 = false;
-            })();
-        }
-
-        if (!timerSet250 && delay250 > 0 && delay250 < 60000) {
-            timerSet250 = true;
-
-            setTimeout(async () => {
-                console.log("⚡ Instant 250 result");
-
-                timerSet250 = false;
-
-                const { users250 } = await getAllUsers(groups);
-
-                if (users250.length) {
-                    let prizeRules250;
-
-                    try {
-                        prizeRules250 = await getPrizeRules("250");
-                    } catch {
-                        prizeRules250 = DEFAULT_RULES_250;
-                    }
-
-                    prizeRules250.sort((a, b) => a.rank - b.rank);
-
-                    const final250 = assign250Prizes(sortUsers(users250), prizeRules250);
-
-                    if (!(await alreadyProcessed("250rs", end250))) {
-                        await saveResults("250rs", final250, end250);
-                    }
-                }
-            }, delay250);
-        }
-
-        if (!timerSet10k && delay10k > 0 && delay10k < 60000) {
-            timerSet10k = true;
-
-            setTimeout(async () => {
-                console.log("⚡ Instant 10K result");
-
-                timerSet10k = false;
-
-                const { users10000 } = await getAllUsers(groups);
-
-                if (users10000.length) {
-                    let prizeRules10k;
-
-                    try {
-                        prizeRules10k = await getPrizeRules("10000");
-                    } catch {
-                        prizeRules10k = DEFAULT_RULES_10000;
-                    }
-
-                    prizeRules10k.sort((a, b) => a.rank - b.rank);
-
-                    const final10k = assign10000Prizes(sortUsers(users10000), prizeRules10k);
-
-                    if (!(await alreadyProcessed("10000rs", end10k))) {
-                        await saveResults("10000rs", final10k, end10k);
-                    }
-                }
-            }, delay10k);
-        }
-
-        const is10000Done =
-            now >= end10k &&
-            now <= end10k + (5 * 60 * 1000); // 5 min window for weekly safety
-        const is250Done = now >= end250 && now <= end250 + (5 * 60 * 1000);
+        const now = getNowIST();  
+        
+        const is250Done = now >= end250;
+        const is10000Done = now >= end10k;
 
         console.log("NOW:", new Date(now).toLocaleString());
         console.log("END 10K:", new Date(end10k).toLocaleString());
@@ -995,87 +713,82 @@ await db.ref("Game-Config").update({
 
         console.log("250 END:", new Date(end250).toLocaleString(), is250Done);
 
-        if (!is10000Done && !is250Done) {
-            return;
-        }
-        if (
-            (is10000Done && await alreadyProcessed("10000rs", end10k)) &&
-            (is250Done && await alreadyProcessed("250rs", end250))
-        ) {
-            return;
-        }
+        // ================= SAFE RESULT EXECUTION =================
 
-        let users10000 = [];
-        let users250 = [];
+if (is250Done) {
 
-        if (is10000Done) {
-            users10000 = (await getAllUsers(groups)).users10000;
-        }
+    const already250 = await alreadyProcessed("250rs", end250);
 
-        if (is250Done) {
-            users250 = (await getAllUsers(groups)).users250;
-        }
-        console.log("Users 10K:", users10000.length);
-        console.log("Users 250:", users250.length);
+    console.log("🧠 250 Check → Done:", is250Done, "Processed:", already250);
 
-        if (is10000Done) {
+    if (!already250) {
 
-            const sorted10k = sortUsers(users10000);
+        const { users250 } = await getAllUsers(groups);
 
-            let prizeRules10k;
+        console.log("👥 Users 250:", users250.length);
 
-            try {
-                prizeRules10k = await getPrizeRules("10000");
-            } catch (e) {
-                prizeRules10k = DEFAULT_RULES_10000;
-            }
+        let prizeRules250;
 
-            prizeRules10k = prizeRules10k.sort((a, b) => a.rank - b.rank);
-
-            const final10k = assign10000Prizes(sorted10k, prizeRules10k);
-
-            if (!(await alreadyProcessed("10000rs", end10k))) {
-                await saveResults("10000rs", final10k, end10k);
-            }
-
-            console.log("🔁 10K restarted for next weekly cycle");
+        try {
+            prizeRules250 = await getPrizeRules("250");
+        } catch {
+            prizeRules250 = DEFAULT_RULES_250;
         }
 
-        if (is250Done) {
+        prizeRules250.sort((a, b) => a.rank - b.rank);
 
-            const sorted250 = sortUsers(users250);
+        const final250 = assign250Prizes(
+            sortUsers(users250),
+            prizeRules250
+        );
 
-            if (sorted250.length) {
+        await saveResults("250rs", final250, end250);
 
-                let prizeRules250;
-
-                try {
-                    prizeRules250 = await getPrizeRules("250");
-                } catch (e) {
-                    prizeRules250 = DEFAULT_RULES_250;
-                }
-
-                prizeRules250 = prizeRules250.sort((a, b) => a.rank - b.rank);
-
-                const final250 = assign250Prizes(sorted250, prizeRules250);
-
-                if (!(await alreadyProcessed("250rs", end250))) {
-                    await saveResults("250rs", final250, end250);
-                }
-            }
-
-            console.log("🔁 250 restarted for next 6hr cycle");
-        }
-
-    } catch (err) {
-        console.error("ERROR:", err);
+        console.log("✅ 250 RESULT GENERATED (SAFE)");
     }
 }
 
-// run every minute
+// ================= 10K SAFE =================
+
+if (is10000Done) {
+
+    const already10k = await alreadyProcessed("10000rs", end10k);
+
+    console.log("🧠 10K Check → Done:", is10000Done, "Processed:", already10k);
+
+    if (!already10k) {
+
+        const { users10000 } = await getAllUsers(groups);
+
+        console.log("👥 Users 10K:", users10000.length);
+
+        let prizeRules10k;
+
+        try {
+            prizeRules10k = await getPrizeRules("10000");
+        } catch {
+            prizeRules10k = DEFAULT_RULES_10000;
+        }
+
+        prizeRules10k.sort((a, b) => a.rank - b.rank);
+
+        const final10k = assign10000Prizes(
+            sortUsers(users10000),
+            prizeRules10k
+        );
+
+        await saveResults("10000rs", final10k, end10k);
+
+        console.log("✅ 10K RESULT GENERATED (SAFE)");
+    }
+}
+} catch (err) {
+    console.error("ERROR:", err);
+}
+}
+
 cron.schedule("* * * * *", processRewards);
 
-// run immediately
 processRewards();
 
 const express = require("express");
