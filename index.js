@@ -155,12 +155,30 @@ async function getUsersFromGroup(groupId) {
 
         const data = snap.val();
 
-        const users = Object.keys(data).map(uid => ({
-            userId: uid,
-            name: data[uid].userName || "User",
-            icon: data[uid].userIconIndex || 0,
-            points: Number(data[uid].points || 0)
-        }));
+        const users = Object.keys(data).map(uid => {
+
+    const user = data[uid];
+
+    let maxPoints = 0;
+
+    if (user.essentials) {
+        for (const key in user.essentials) {
+            const attempt = user.essentials[key];
+            const pts = Number(attempt.points || 0);
+
+            if (pts > maxPoints) {
+                maxPoints = pts;
+            }
+        }
+    }
+
+    return {
+        userId: uid,
+        name: user.userName || "User",
+        icon: user.userIconIndex || 0,
+        points: maxPoints
+    };
+});
 
         return users;
     } catch (err) {
