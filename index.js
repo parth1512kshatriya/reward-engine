@@ -458,10 +458,17 @@ async function alreadyProcessed(type, endTime) {
 // save results
 async function saveResults(type, users, endTime) {
 
-    if (await alreadyProcessed(type, endTime)) {
-        console.log(`⏩ Already processed ${type}`);
-        return;
-    }
+    const lockRef = db.ref(`locks/${type}/${endTime}`);
+
+const lockSnap = await lockRef.transaction((current) => {
+    if (current === true) return;
+    return true;
+});
+
+if (!lockSnap.committed) {
+    console.log(`⏩ Skipped (locked): ${type}`);
+    return;
+}
 
     const now = new Date();
 
@@ -494,67 +501,51 @@ async function saveResults(type, users, endTime) {
     // Save result
     await db.ref(`rise-rewards-result/${type}/${key}`).set(resultData);
     await db.ref(`latest-result/${type}`).set(resultData);
-
+    console.log(`📦 Result stored for ${type} | Users: ${Object.keys(usersObject).length}`);
     console.log("📦 Result saved, now updating earnings...");
 
     // IMPORTANT: process each user safely
-    for (const user of users) {
+   const BATCH_SIZE = 500;
 
-        if (!user.userId || user.prizeAmount <= 0) continue;
+for (let i = 0; i < users.length; i += BATCH_SIZE) {
+    console.log(`⚡ Processing batch ${i} → ${i + BATCH_SIZE}`);
+    const batch = users.slice(i, i + BATCH_SIZE);
+
+    await Promise.all(batch.map(async (user) => {
+
+        if (!user.userId || user.prizeAmount <= 0) return;
 
         const userRefPath = `users/${user.userId}`;
-
-        const userSnap = await db.ref(userRefPath).once("value");
-
-        if (!userSnap.exists()) {
-            console.log("⏩ Skipping missing user:", user.userId);
-            continue; 
-        }
-
         const resultKey = String(endTime);
-
         const processedPath = `${userRefPath}/processedResults/${type}/${resultKey}`;
 
-        // ATOMIC LOCK (THIS IS THE MAIN FIX)
-        await db.ref(processedPath).transaction(async (current) => {
-
-            if (current === true) {
-                return;
-            }
-
+        try {
+            const lock = await db.ref(processedPath).transaction((current) => {
+             if (current === true) return;
             return true;
+            });
 
-        }, async (error, committed) => {
+    if (!lock.committed) return;
 
-            if (error) {
-                console.error("Transaction error:", error);
-                return;
-            }
+    const updates = {};
 
-            if (!committed) {
-                return;
-            }
-
-            try {
-                const updates = {};
-
-                if (type === "250rs") {
-                    updates[`${userRefPath}/totalEarningFromRiseRewards121rs`] =
-                        admin.database.ServerValue.increment(user.prizeAmount);
-                }
-
-                if (type === "10000rs") {
-                    updates[`${userRefPath}/totalEarningFromRiseRewards10K`] =
-                        admin.database.ServerValue.increment(user.prizeAmount);
-                }
-
-                await db.ref().update(updates);
-
-            } catch (err) {
-                console.error("❌ Earnings update failed:", err);
-            }
-        });
+    if (type === "250rs") {
+        updates[`${userRefPath}/totalEarningFromRiseRewards121rs`] =
+            admin.database.ServerValue.increment(user.prizeAmount);
     }
+
+    if (type === "10000rs") {
+        updates[`${userRefPath}/totalEarningFromRiseRewards10K`] =
+            admin.database.ServerValue.increment(user.prizeAmount);
+    }
+
+    await db.ref().update(updates);
+
+} catch (err) {
+    console.error("❌ Update failed:", user.userId);
+}
+    }));
+}
 
     console.log("💰 User earnings updated safely (no duplicates)");
 
@@ -572,6 +563,12 @@ async function saveResults(type, users, endTime) {
     }
 
     console.log(`✅ Saved ${type} result with userId keys`);
+}
+
+async function shouldProcessResult(type, endTime) {
+    const now = getNowIST();
+
+    return now >= endTime;
 }
 
 async function processRewards() {
@@ -697,119 +694,75 @@ await db.ref("Game-Config").update({
 
         const now = getNowIST();
 
-const endMorning = getTodayISTTime(14, 0);
-const startEvening = getTodayISTTime(15, 0);
-const endEvening = getTodayISTTime(21, 0);
-const nightEnd = getTodayISTTime(22, 0);
-
-// Result windows
-const isMorningResultTime = now >= endMorning && now < startEvening;
-const isEveningResultTime = now >= endEvening && now < nightEnd;
-        const is10000Done = now >= end10k;
-console.log("⏰ MorningResult:", isMorningResultTime);
-console.log("⏰ EveningResult:", isEveningResultTime);
-        console.log("NOW:", new Date(now).toLocaleString());
-        console.log("END 10K:", new Date(end10k).toLocaleString());
-      //  console.log("END 250:", new Date(end250).toLocaleString());
-        console.log("is10000Done:", is10000Done);
-        //console.log("is250Done:", is250Done);
-
-        console.log("10K END:", new Date(end10k).toLocaleString(), is10000Done);
-
-      //  console.log("250 END:", new Date(end250).toLocaleString(), is250Done);
-
-        // ================= SAFE RESULT EXECUTION =================
-
+        const { users250, users10000 } = await getAllUsers(groups);
 // ================= 250 SAFE =================
 
-if (isMorningResultTime || isEveningResultTime) {
+const resultTimes250 = [
+    getTodayISTTime(14, 0),
+    getTodayISTTime(21, 0)
+];
 
-    const resultEndTime = isMorningResultTime
-        ? endMorning
-        : endEvening;
+for (const resultEndTime of resultTimes250) {
 
-    const already250 = await alreadyProcessed("250rs", resultEndTime);
+    if (!(await shouldProcessResult("250rs", resultEndTime))) continue;
 
-    console.log(
-        "🧠 250 Check → Time:",
-        new Date(resultEndTime).toLocaleString(),
-        "Processed:",
-        already250
+    console.log("🚀 Processing 250 result:", new Date(resultEndTime).toLocaleString());
+
+    let prizeRules250;
+
+    try {
+        prizeRules250 = await getPrizeRules("250");
+    } catch {
+        prizeRules250 = DEFAULT_RULES_250;
+    }
+
+    prizeRules250.sort((a, b) => a.rank - b.rank);
+
+    const final250 = assign250Prizes(
+        sortUsers(users250),
+        prizeRules250
     );
 
-    if (!already250) {
+    console.log(`👥 Total 250 users: ${users250.length}`);
+    console.log(`🏆 Winners 250: ${final250.length}`);
+    
+    await saveResults("250rs", final250, resultEndTime);
 
-        const { users250 } = await getAllUsers(groups);
-
-        console.log("👥 Users 250:", users250.length);
-
-        let prizeRules250;
-
-        try {
-            prizeRules250 = await getPrizeRules("250");
-        } catch {
-            prizeRules250 = DEFAULT_RULES_250;
-        }
-
-        prizeRules250.sort((a, b) => a.rank - b.rank);
-
-        const final250 = assign250Prizes(
-            sortUsers(users250),
-            prizeRules250
-        );
-
-        await saveResults("250rs", final250, resultEndTime);
-
-        console.log("✅ 250 RESULT GENERATED (FIXED)");
-    }
+    console.log("✅ 250 RESULT GENERATED");
 }
 
-/// ================= 10K SAFE =================
+// ================= 10K SAFE =================
 
-const is10kResultTime =
-    now >= end10k &&
-    now < end10k + (60 * 60 * 1000); // 1 hour window
+if (await shouldProcessResult("10000rs", end10k)) {
 
-if (is10kResultTime) {
+    console.log("🚀 Processing 10K result");
 
-    const already10k = await alreadyProcessed("10000rs", end10k);
+    let prizeRules10k;
 
-    console.log(
-        "🧠 10K Check → Time:",
-        new Date(end10k).toLocaleString(),
-        "Processed:",
-        already10k
+    try {
+        prizeRules10k = await getPrizeRules("10000");
+    } catch {
+        prizeRules10k = DEFAULT_RULES_10000;
+    }
+
+    prizeRules10k.sort((a, b) => a.rank - b.rank);
+
+    const final10k = assign10000Prizes(
+        sortUsers(users10000),
+        prizeRules10k
     );
 
-    if (!already10k) {
+    console.log(`👥 Total 10K users: ${users10000.length}`);
+    console.log(`🏆 Winners 10K: ${final10k.length}`);
+    
+    await saveResults("10000rs", final10k, end10k);
 
-        const { users10000 } = await getAllUsers(groups);
-
-        console.log("👥 Users 10K:", users10000.length);
-
-        let prizeRules10k;
-
-        try {
-            prizeRules10k = await getPrizeRules("10000");
-        } catch {
-            prizeRules10k = DEFAULT_RULES_10000;
-        }
-
-        prizeRules10k.sort((a, b) => a.rank - b.rank);
-
-        const final10k = assign10000Prizes(
-            sortUsers(users10000),
-            prizeRules10k
-        );
-
-        await saveResults("10000rs", final10k, end10k);
-
-        console.log("✅ 10K RESULT GENERATED (FINAL FIX)");
-    }
+    console.log("✅ 10K RESULT GENERATED");
 }
 } catch (err) {
     console.error("ERROR:", err);
 }
+    console.log("✅ Reward cycle completed");
 }
 
 cron.schedule("* * * * *", processRewards);
