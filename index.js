@@ -722,6 +722,10 @@ const resultTimes250 = [
 
 for (const resultEndTime of resultTimes250) {
 
+    const resultId = config._250rs_CompetitionResultID;
+
+    if (resultId && Number(resultId) === resultEndTime) continue;
+
     if (!(await shouldProcessResult("250rs", resultEndTime))) continue;
 
     console.log("🚀 Processing 250 result:", new Date(resultEndTime).toLocaleString());
