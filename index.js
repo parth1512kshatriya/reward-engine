@@ -722,9 +722,9 @@ const resultTimes250 = [
 
 for (const resultEndTime of resultTimes250) {
 
-    const resultId = config._250rs_CompetitionResultID;
+    const lockSnap = await db.ref(`locks/250rs/${resultEndTime}`).once("value");
 
-    if (resultId && Number(resultId) === resultEndTime) continue;
+    if (lockSnap.exists()) continue;
 
     if (!(await shouldProcessResult("250rs", resultEndTime))) continue;
 
