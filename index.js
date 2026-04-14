@@ -352,13 +352,15 @@ function assign250Prizes(users, prizeRules) {
         }
     }
 
-    for (const user of nonQualified) {
-        result.push({
-            ...user,
-            rank: 999999,
-            prizeAmount: 0,
-        });
-    }
+    let startRank = qualified.length + 1;
+
+for (let i = 0; i < nonQualified.length; i++) {
+    result.push({
+        ...nonQualified[i],
+        rank: startRank + i,
+        prizeAmount: 0,
+    });
+}
 
     return result;
 }
@@ -452,13 +454,15 @@ function assign10000Prizes(users, prizeRules) {
     }
 
     // NON QUALIFIED
-    for (const user of nonQualified) {
-        result.push({
-            ...user,
-            rank: 999999,
-            prizeAmount: 0,
-        });
-    }
+    let startRank = qualified.length + 1;
+
+for (let i = 0; i < nonQualified.length; i++) {
+    result.push({
+        ...nonQualified[i],
+        rank: startRank + i,
+        prizeAmount: 0,
+    });
+}
 
     return result;
 }
