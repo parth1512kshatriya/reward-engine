@@ -161,16 +161,20 @@ async function getUsersFromGroup(groupId) {
 
     let maxPoints = 0;
 
-    if (user.essentials) {
-        for (const key in user.essentials) {
-            const attempt = user.essentials[key];
-            const pts = Number(attempt.points || 0);
+// check essentials
+if (user.essentials) {
+    for (const key in user.essentials) {
+        const attempt = user.essentials[key];
+        const pts = Number(attempt.points || 0);
 
-            if (pts > maxPoints) {
-                maxPoints = pts;
-            }
+        if (pts > maxPoints) {
+            maxPoints = pts;
         }
     }
+}
+
+// ALWAYS compare with direct points
+maxPoints = Math.max(maxPoints, Number(user.points || 0));
 
     return {
     userId: uid,
