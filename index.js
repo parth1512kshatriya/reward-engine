@@ -173,10 +173,12 @@ async function getUsersFromGroup(groupId) {
     }
 
     return {
-        userId: uid,
-        name: user.userName || "User",
-        icon: user.userIconIndex || 0,
-        points: maxPoints
+    userId: uid,
+    name: user.userName || "User",
+    icon: user.userIconIndex || 0,
+    points: maxPoints,
+
+    registeredId: user.registeredId || null
     };
 });
 
