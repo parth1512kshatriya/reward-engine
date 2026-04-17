@@ -353,8 +353,6 @@ function assign250Prizes(users, prizeRules) {
                     ...user,
                     rank: group.rank,
                     prizeAmount: payout,
-                ...user,
-                prizeAmount: payout,
                 });
             }
         }
@@ -368,9 +366,6 @@ for (let i = 0; i < nonQualified.length; i++) {
         rank: startRank + i,
         prizeAmount: 0,
     });
-    ...nonQualified[i],
-    prizeAmount: 0,
-});
 }
 
     return result;
@@ -459,8 +454,6 @@ function assign10000Prizes(users, prizeRules) {
                     ...user,
                     rank: group.rank,
                     prizeAmount: payout,
-                ...user,
-                prizeAmount: payout,
                 });
             }
         }
@@ -475,9 +468,6 @@ for (let i = 0; i < nonQualified.length; i++) {
         rank: startRank + i,
         prizeAmount: 0,
     });
-    ...nonQualified[i],
-    prizeAmount: 0,
-});
 }
 
     return result;
@@ -489,16 +479,9 @@ async function alreadyProcessed(type, endTime) {
         .orderByChild("endTime")
         .equalTo(endTime)
         .once("value");
-//async function alreadyProcessed(type, endTime) {
-    //const snap = await db.ref(`rise-rewards-result/${type}`)
-        //.orderByChild("endTime")
-       // .equalTo(endTime)
-       // .once("value");
 
     return snap.exists();
 }
-  //  return snap.exists();
-//}
 
 // save results
 async function saveResults(type, users, endTime) {
@@ -528,7 +511,6 @@ if (!lockSnap.committed) {
     const key = endTime;
 
     const usersObject = {};
-    //const usersObject = {};
 
     for (let i = 0; i < users.length; i++) {
         const user = users[i];
@@ -536,70 +518,30 @@ if (!lockSnap.committed) {
             usersObject[user.userId] = user;
         }
     }
-   // for (let i = 0; i < users.length; i++) {
-    //    const user = users[i];
-   //     if (user.userId) {
-    //        usersObject[user.userId] = user;
-    //    }
-   // }
-
-    const usersArray = users.map((user, i) => ({
-    ...user,
-    rank: i + 1 // continuous ranking
-    }));
 
     const resultData = {
         createdAt: now.toISOString(),
         displayDate,
         endTime,
         users: usersObject
-        users: usersArray
     };
 
     // Save result
     await db.ref(`rise-rewards-result/${type}/${key}`).set(resultData);
     await db.ref(`latest-result/${type}`).set(resultData);
     console.log(`📦 Result stored for ${type} | Users: ${Object.keys(usersObject).length}`);
-    console.log(`📦 Result stored for ${type} | Users: ${usersArray.length}`);
     console.log("📦 Result saved, now updating earnings...");
 
     // IMPORTANT: process each user safely
    const BATCH_SIZE = 500;
 
-// fetch once
-const usersSnap = await db.ref("users").get({ shallow: true });
-
-// Set for O(1) lookup
-const usersData = usersSnap.val() || {};
-
-const existingUsers = new Set();
-
-for (const uid in usersData) {
-    existingUsers.add(uid);
-}
-
 for (let i = 0; i < users.length; i += BATCH_SIZE) {
-for (let i = 0; i < usersArray.length; i += BATCH_SIZE) {
-
     console.log(`⚡ Processing batch ${i} → ${i + BATCH_SIZE}`);
     const batch = users.slice(i, i + BATCH_SIZE);
-    const batch = usersArray.slice(i, i + BATCH_SIZE);
 
     await Promise.all(batch.map(async (user) => {
 
-        if (
-            !user.userId ||
-            !user?.userId ||
-            user.prizeAmount <= 0 ||
-            user.registeredId === "customUser"
-        ) return;
-            ) return;
-
-        // skip non-existing users
-        if (!existingUsers.has(user.userId)) {
-            console.log("⏭️ Skipping non-existing user:", user.userId);
-            return;
-        }
+        if (!user.userId || user.prizeAmount <= 0) return;
 
         const userRefPath = `users/${user.userId}`;
         const resultKey = String(endTime);
@@ -607,35 +549,35 @@ for (let i = 0; i < usersArray.length; i += BATCH_SIZE) {
 
         try {
             const lock = await db.ref(processedPath).transaction((current) => {
-                if (current === true) return;
-                return true;
+             if (current === true) return;
+            return true;
             });
 
-            if (!lock.committed) return;
+    if (!lock.committed) return;
 
-            const updates = {};
+    const updates = {};
 
-            if (type === "250rs") {
-                updates[`${userRefPath}/totalEarningFromRiseRewards121rs`] =
-                    admin.database.ServerValue.increment(user.prizeAmount);
-            }
+    if (type === "250rs") {
+        updates[`${userRefPath}/totalEarningFromRiseRewards121rs`] =
+            admin.database.ServerValue.increment(user.prizeAmount);
+    }
 
-            if (type === "10000rs") {
-                updates[`${userRefPath}/totalEarningFromRiseRewards10K`] =
-                    admin.database.ServerValue.increment(user.prizeAmount);
-            }
+    if (type === "10000rs") {
+        updates[`${userRefPath}/totalEarningFromRiseRewards10K`] =
+            admin.database.ServerValue.increment(user.prizeAmount);
+    }
 
-            await db.ref().update(updates);
+    await db.ref().update(updates);
 
-        } catch (err) {
-            console.error("❌ Update failed:", user.userId);
-        }
+} catch (err) {
+    console.error("❌ Update failed:", user.userId);
+}
     }));
 }
 
     console.log("💰 User earnings updated safely (no duplicates)");
 
-    // Update config
+    // ✅ Update config
     if (type === "10000rs") {
         await db.ref("Game-Config").update({
             _10K_CompetitionResultID: key
@@ -649,9 +591,6 @@ for (let i = 0; i < usersArray.length; i += BATCH_SIZE) {
     }
 
     console.log(`✅ Saved ${type} result with userId keys`);
-   // console.log(`✅ Saved ${type} result with userId keys`);
-
-    console.log(`✅ Saved ${type} result (array format)`);
 }
 
 async function shouldProcessResult(type, endTime) {
@@ -818,7 +757,7 @@ for (const resultEndTime of resultTimes250) {
 
     console.log(`👥 Total 250 users: ${users250.length}`);
     console.log(`🏆 Winners 250: ${final250.length}`);
-
+    
     await saveResults("250rs", final250, resultEndTime);
 
     console.log("✅ 250 RESULT GENERATED");
@@ -847,7 +786,7 @@ if (await shouldProcessResult("10000rs", end10k)) {
 
     console.log(`👥 Total 10K users: ${users10000.length}`);
     console.log(`🏆 Winners 10K: ${final10k.length}`);
-
+    
     await saveResults("10000rs", final10k, end10k);
 
     console.log("✅ 10K RESULT GENERATED");
