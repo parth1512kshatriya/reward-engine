@@ -515,16 +515,22 @@ if (!lockSnap.committed) {
     //    }
    // }
 
-    const usersArray = users.map((user, i) => ({
-    ...user,
-    rank: i + 1 // continuous ranking
-    }));
+    const usersObject = {};
+
+users.forEach((user, i) => {
+    if (!user.userId) return;
+
+    usersObject[user.userId] = {
+        ...user,
+        rank: i + 1
+    };
+});
 
     const resultData = {
         createdAt: now.toISOString(),
         displayDate,
         endTime,
-        users: usersArray
+        users: usersObject
     };
 
     // Save result
