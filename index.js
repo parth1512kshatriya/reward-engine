@@ -497,7 +497,7 @@ if (!lockSnap.committed) {
     console.log(`⏩ Skipped (locked): ${type}`);
     return;
 }
-
+    
     const now = new Date();
 
     const displayDate = now.toLocaleString("en-IN", {
@@ -533,46 +533,77 @@ if (!lockSnap.committed) {
     console.log("📦 Result saved, now updating earnings...");
 
     // IMPORTANT: process each user safely
-   const BATCH_SIZE = 500;
+ const BATCH_SIZE = 500;
 
 for (let i = 0; i < users.length; i += BATCH_SIZE) {
+
     console.log(`⚡ Processing batch ${i} → ${i + BATCH_SIZE}`);
+
     const batch = users.slice(i, i + BATCH_SIZE);
 
-    await Promise.all(batch.map(async (user) => {
+    // ✅ STEP 1: Check existence (optimized)
+    const snaps = await Promise.all(
+        batch.map(user =>
+            user?.userId
+                ? db.ref(`users/${user.userId}`).once("value")
+                : Promise.resolve(null)
+        )
+    );
 
-        if (!user.userId || user.prizeAmount <= 0) return;
+    const updates = {};
+
+    // ✅ STEP 2: Process users
+    await Promise.all(batch.map(async (user, index) => {
+
+        const snap = snaps[index];
+
+        // 🚫 Skip invalid users
+        if (
+            !user?.userId ||
+            user.prizeAmount <= 0 ||
+            user.registeredId === "customUser" ||
+            !snap ||
+            !snap.exists()
+        ) {
+            if (!snap || !snap.exists()) {
+                console.log("⏭️ Skipping invalid user:", user?.userId);
+            }
+            return;
+        }
 
         const userRefPath = `users/${user.userId}`;
         const resultKey = String(endTime);
         const processedPath = `${userRefPath}/processedResults/${type}/${resultKey}`;
 
         try {
+            // ✅ Prevent duplicate reward
             const lock = await db.ref(processedPath).transaction((current) => {
-             if (current === true) return;
-            return true;
+                if (current === true) return;
+                return true;
             });
 
-    if (!lock.committed) return;
+            if (!lock.committed) return;
+            updates[processedPath] = true;
+            // ✅ Add to batch updates (NOT per user write)
+            if (type === "250rs") {
+                updates[`${userRefPath}/totalEarningFromRiseRewards121rs`] =
+                    admin.database.ServerValue.increment(user.prizeAmount);
+            }
 
-    const updates = {};
+            if (type === "10000rs") {
+                updates[`${userRefPath}/totalEarningFromRiseRewards10K`] =
+                    admin.database.ServerValue.increment(user.prizeAmount);
+            }
 
-    if (type === "250rs") {
-        updates[`${userRefPath}/totalEarningFromRiseRewards121rs`] =
-            admin.database.ServerValue.increment(user.prizeAmount);
-    }
-
-    if (type === "10000rs") {
-        updates[`${userRefPath}/totalEarningFromRiseRewards10K`] =
-            admin.database.ServerValue.increment(user.prizeAmount);
-    }
-
-    await db.ref().update(updates);
-
-} catch (err) {
-    console.error("❌ Update failed:", user.userId);
-}
+        } catch (err) {
+            console.error("❌ Update failed:", user.userId);
+        }
     }));
+
+    // ✅ SINGLE WRITE PER BATCH (VERY FAST 🚀)
+    if (Object.keys(updates).length > 0) {
+        await db.ref().update(updates);
+    }
 }
 
     console.log("💰 User earnings updated safely (no duplicates)");
