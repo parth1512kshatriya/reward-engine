@@ -350,11 +350,9 @@ const payout = Math.round(
 for (const group of block.groups) {
 for (const user of group.players) {
 result.push({
-                    ...user,
-                    rank: group.rank,
-                    prizeAmount: payout,
-                ...user,
-                prizeAmount: payout,
+    ...user,
+    rank: group.rank,
+    prizeAmount: payout,
 });
 }
 }
@@ -364,11 +362,8 @@ let startRank = qualified.length + 1;
 
 for (let i = 0; i < nonQualified.length; i++) {
 result.push({
-        ...nonQualified[i],
-        rank: startRank + i,
-        prizeAmount: 0,
-    });
     ...nonQualified[i],
+    rank: startRank + i,
     prizeAmount: 0,
 });
 }
@@ -456,11 +451,9 @@ const payout = Math.round(
 for (const group of block.groups) {
 for (const user of group.players) {
 result.push({
-                    ...user,
-                    rank: group.rank,
-                    prizeAmount: payout,
-                ...user,
-                prizeAmount: payout,
+    ...user,
+    rank: group.rank,
+    prizeAmount: payout,
 });
 }
 }
@@ -471,11 +464,8 @@ let startRank = qualified.length + 1;
 
 for (let i = 0; i < nonQualified.length; i++) {
 result.push({
-        ...nonQualified[i],
-        rank: startRank + i,
-        prizeAmount: 0,
-    });
     ...nonQualified[i],
+    rank: startRank + i,
     prizeAmount: 0,
 });
 }
@@ -527,40 +517,33 @@ minute: "2-digit"
 
 const key = endTime;
 
-    const usersObject = {};
-    //const usersObject = {};
-
-    for (let i = 0; i < users.length; i++) {
-        const user = users[i];
-        if (user.userId) {
-            usersObject[user.userId] = user;
-        }
-    }
-   // for (let i = 0; i < users.length; i++) {
-    //    const user = users[i];
-   //     if (user.userId) {
-    //        usersObject[user.userId] = user;
-    //    }
-   // }
-
-    const usersArray = users.map((user, i) => ({
+    // 1. FIRST create sorted + ranked array
+const usersArray = users.map((user, i) => ({
     ...user,
-    rank: i + 1 // continuous ranking
-    }));
+    rank: i + 1
+}));
+
+// 2. THEN convert to object using SAME order
+const usersObject = {};
+
+usersArray.forEach((user) => {
+    if (!user.userId) return;
+
+    usersObject[user.userId] = user;
+});
 
 const resultData = {
-createdAt: now.toISOString(),
-displayDate,
-endTime,
-        users: usersObject
-        users: usersArray
+    createdAt: now.toISOString(),
+    displayDate,
+    endTime,
+    users: usersObject
 };
 
 // Save result
 await db.ref(`rise-rewards-result/${type}/${key}`).set(resultData);
 await db.ref(`latest-result/${type}`).set(resultData);
-    console.log(`📦 Result stored for ${type} | Users: ${Object.keys(usersObject).length}`);
-    console.log(`📦 Result stored for ${type} | Users: ${usersArray.length}`);
+
+console.log(`📦 Result stored for ${type} | Users: ${usersArray.length}`);
 console.log("📦 Result saved, now updating earnings...");
 
 // IMPORTANT: process each user safely
@@ -578,22 +561,19 @@ for (const uid in usersData) {
 existingUsers.add(uid);
 }
 
-for (let i = 0; i < users.length; i += BATCH_SIZE) {
 for (let i = 0; i < usersArray.length; i += BATCH_SIZE) {
 
-console.log(`⚡ Processing batch ${i} → ${i + BATCH_SIZE}`);
-    const batch = users.slice(i, i + BATCH_SIZE);
+    console.log(`⚡ Processing batch ${i} → ${i + BATCH_SIZE}`);
+
     const batch = usersArray.slice(i, i + BATCH_SIZE);
 
-await Promise.all(batch.map(async (user) => {
+    await Promise.all(batch.map(async (user) => {
 
-if (
-            !user.userId ||
-            !user?.userId ||
-user.prizeAmount <= 0 ||
-user.registeredId === "customUser"
-        ) return;
-            ) return;
+     if (
+    !user?.userId ||
+    user.prizeAmount <= 0 ||
+    user.registeredId === "customUser"
+) return;
 
 // skip non-existing users
 if (!existingUsers.has(user.userId)) {
@@ -648,10 +628,7 @@ _250rs_CompetitionResultID: key
 });
 }
 
-    console.log(`✅ Saved ${type} result with userId keys`);
-   // console.log(`✅ Saved ${type} result with userId keys`);
-
-    console.log(`✅ Saved ${type} result (array format)`);
+   console.log(`✅ Saved ${type} result (userId-based, ranked)`);
 }
 
 async function shouldProcessResult(type, endTime) {
