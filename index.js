@@ -535,13 +535,30 @@ if (!lockSnap.committed) {
     // IMPORTANT: process each user safely
    const BATCH_SIZE = 500;
 
+// fetch once
+const usersSnap = await db.ref("users").once("value");
+
+// Set for O(1) lookup
+const existingUsers = new Set(Object.keys(usersSnap.val() || {}));
+
 for (let i = 0; i < users.length; i += BATCH_SIZE) {
+
     console.log(`⚡ Processing batch ${i} → ${i + BATCH_SIZE}`);
     const batch = users.slice(i, i + BATCH_SIZE);
 
     await Promise.all(batch.map(async (user) => {
 
-        if (!user.userId || user.prizeAmount <= 0) return;
+        if (
+            !user.userId ||
+            user.prizeAmount <= 0 ||
+            user.registeredId === "customUser"
+        ) return;
+
+        // skip non-existing users
+        if (!existingUsers.has(user.userId)) {
+            console.log("⏭️ Skipping non-existing user:", user.userId);
+            return;
+        }
 
         const userRefPath = `users/${user.userId}`;
         const resultKey = String(endTime);
@@ -549,35 +566,35 @@ for (let i = 0; i < users.length; i += BATCH_SIZE) {
 
         try {
             const lock = await db.ref(processedPath).transaction((current) => {
-             if (current === true) return;
-            return true;
+                if (current === true) return;
+                return true;
             });
 
-    if (!lock.committed) return;
+            if (!lock.committed) return;
 
-    const updates = {};
+            const updates = {};
 
-    if (type === "250rs") {
-        updates[`${userRefPath}/totalEarningFromRiseRewards121rs`] =
-            admin.database.ServerValue.increment(user.prizeAmount);
-    }
+            if (type === "250rs") {
+                updates[`${userRefPath}/totalEarningFromRiseRewards121rs`] =
+                    admin.database.ServerValue.increment(user.prizeAmount);
+            }
 
-    if (type === "10000rs") {
-        updates[`${userRefPath}/totalEarningFromRiseRewards10K`] =
-            admin.database.ServerValue.increment(user.prizeAmount);
-    }
+            if (type === "10000rs") {
+                updates[`${userRefPath}/totalEarningFromRiseRewards10K`] =
+                    admin.database.ServerValue.increment(user.prizeAmount);
+            }
 
-    await db.ref().update(updates);
+            await db.ref().update(updates);
 
-} catch (err) {
-    console.error("❌ Update failed:", user.userId);
-}
+        } catch (err) {
+            console.error("❌ Update failed:", user.userId);
+        }
     }));
 }
 
     console.log("💰 User earnings updated safely (no duplicates)");
 
-    // ✅ Update config
+    // Update config
     if (type === "10000rs") {
         await db.ref("Game-Config").update({
             _10K_CompetitionResultID: key
