@@ -539,7 +539,13 @@ if (!lockSnap.committed) {
 const usersSnap = await db.ref("users").once("value");
 
 // Set for O(1) lookup
-const existingUsers = new Set(Object.keys(usersSnap.val() || {}));
+const usersData = usersSnap.val() || {};
+
+const existingUsers = new Set();
+
+for (const uid in usersData) {
+    existingUsers.add(uid);
+}
 
 for (let i = 0; i < users.length; i += BATCH_SIZE) {
 
