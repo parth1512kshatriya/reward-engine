@@ -536,7 +536,7 @@ if (!lockSnap.committed) {
    const BATCH_SIZE = 500;
 
 // fetch once
-const usersSnap = await db.ref("users").once("value");
+const usersSnap = await db.ref("users").get({ shallow: true });
 
 // Set for O(1) lookup
 const usersData = usersSnap.val() || {};
