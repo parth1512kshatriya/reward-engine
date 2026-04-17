@@ -350,9 +350,8 @@ function assign250Prizes(users, prizeRules) {
         for (const group of block.groups) {
             for (const user of group.players) {
                 result.push({
-                    ...user,
-                    rank: group.rank,
-                    prizeAmount: payout,
+                ...user,
+                prizeAmount: payout,
                 });
             }
         }
@@ -362,10 +361,9 @@ function assign250Prizes(users, prizeRules) {
 
 for (let i = 0; i < nonQualified.length; i++) {
     result.push({
-        ...nonQualified[i],
-        rank: startRank + i,
-        prizeAmount: 0,
-    });
+    ...nonQualified[i],
+    prizeAmount: 0,
+});
 }
 
     return result;
@@ -451,9 +449,8 @@ function assign10000Prizes(users, prizeRules) {
         for (const group of block.groups) {
             for (const user of group.players) {
                 result.push({
-                    ...user,
-                    rank: group.rank,
-                    prizeAmount: payout,
+                ...user,
+                prizeAmount: payout,
                 });
             }
         }
@@ -464,24 +461,23 @@ function assign10000Prizes(users, prizeRules) {
 
 for (let i = 0; i < nonQualified.length; i++) {
     result.push({
-        ...nonQualified[i],
-        rank: startRank + i,
-        prizeAmount: 0,
-    });
+    ...nonQualified[i],
+    prizeAmount: 0,
+});
 }
 
     return result;
 }
 // prevent duplicate results
 
-async function alreadyProcessed(type, endTime) {
-    const snap = await db.ref(`rise-rewards-result/${type}`)
-        .orderByChild("endTime")
-        .equalTo(endTime)
-        .once("value");
+//async function alreadyProcessed(type, endTime) {
+    //const snap = await db.ref(`rise-rewards-result/${type}`)
+        //.orderByChild("endTime")
+       // .equalTo(endTime)
+       // .once("value");
 
-    return snap.exists();
-}
+  //  return snap.exists();
+//}
 
 // save results
 async function saveResults(type, users, endTime) {
@@ -510,26 +506,31 @@ if (!lockSnap.committed) {
 
     const key = endTime;
 
-    const usersObject = {};
+    //const usersObject = {};
 
-    for (let i = 0; i < users.length; i++) {
-        const user = users[i];
-        if (user.userId) {
-            usersObject[user.userId] = user;
-        }
-    }
+   // for (let i = 0; i < users.length; i++) {
+    //    const user = users[i];
+   //     if (user.userId) {
+    //        usersObject[user.userId] = user;
+    //    }
+   // }
+
+    const usersArray = users.map((user, i) => ({
+    ...user,
+    rank: i + 1 // continuous ranking
+    }));
 
     const resultData = {
         createdAt: now.toISOString(),
         displayDate,
         endTime,
-        users: usersObject
+        users: usersArray
     };
 
     // Save result
     await db.ref(`rise-rewards-result/${type}/${key}`).set(resultData);
     await db.ref(`latest-result/${type}`).set(resultData);
-    console.log(`📦 Result stored for ${type} | Users: ${Object.keys(usersObject).length}`);
+    console.log(`📦 Result stored for ${type} | Users: ${usersArray.length}`);
     console.log("📦 Result saved, now updating earnings...");
 
     // IMPORTANT: process each user safely
@@ -547,18 +548,18 @@ for (const uid in usersData) {
     existingUsers.add(uid);
 }
 
-for (let i = 0; i < users.length; i += BATCH_SIZE) {
+for (let i = 0; i < usersArray.length; i += BATCH_SIZE) {
 
     console.log(`⚡ Processing batch ${i} → ${i + BATCH_SIZE}`);
-    const batch = users.slice(i, i + BATCH_SIZE);
+    const batch = usersArray.slice(i, i + BATCH_SIZE);
 
     await Promise.all(batch.map(async (user) => {
 
         if (
-            !user.userId ||
+            !user?.userId ||
             user.prizeAmount <= 0 ||
             user.registeredId === "customUser"
-        ) return;
+            ) return;
 
         // skip non-existing users
         if (!existingUsers.has(user.userId)) {
@@ -613,7 +614,9 @@ for (let i = 0; i < users.length; i += BATCH_SIZE) {
         });
     }
 
-    console.log(`✅ Saved ${type} result with userId keys`);
+   // console.log(`✅ Saved ${type} result with userId keys`);
+
+    console.log(`✅ Saved ${type} result (array format)`);
 }
 
 async function shouldProcessResult(type, endTime) {
