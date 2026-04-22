@@ -20,10 +20,10 @@ const db = admin.database();
 
 const DEFAULT_RULES_10000 = [
     { rank: 1, count: 1, amount: 10000 },
-    { rank: 2, count: 1, amount: 1000 },
-    { rank: 3, count: 3, amount: 500 },
-    { rank: 4, count: 4, amount: 100 },
-    { rank: 5, count: 5, amount: 50 },
+    { rank: 2, count: 1, amount: 2000 },
+    { rank: 3, count: 3, amount: 1000 },
+    { rank: 4, count: 4, amount: 500 },
+    { rank: 5, count: 5, amount: 100 },
     { rank: 6, count: 986, amount: 5 },
     { rank: 7, count: 9000, amount: 1 }
 ];
