@@ -578,13 +578,32 @@ for (let i = 0; i < users.length; i += BATCH_SIZE) {
 
     try {
         const lock = await db.ref(processedPath).transaction((current) => {
-            if (current === true) return;
-            return true;
-        });
+    if (current === true) return;
+    return true;
+});
 
-        if (!lock.committed) continue;
+if (!lock.committed) {
 
+    const currentUser = snap.val() || {};
+
+    let currentEarning = 0;
+
+    if (type === "250rs") {
+        currentEarning = currentUser.totalEarningFromRiseRewards121rs || 0;
+    }
+
+    if (type === "10000rs") {
+        currentEarning = currentUser.totalEarningFromRiseRewards10K || 0;
+    }
+
+   if (lock.snapshot.val() === true) {
         updates[processedPath] = true;
+    }
+
+    continue; 
+}
+
+        //updates[processedPath] = true;
 
         if (type === "250rs") {
             updates[`${userRefPath}/totalEarningFromRiseRewards121rs`] =
