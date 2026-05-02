@@ -553,52 +553,53 @@ for (let i = 0; i < users.length; i += BATCH_SIZE) {
     const updates = {};
 
     // ✅ STEP 2: Process users
-    await Promise.all(batch.map(async (user, index) => {
+  for (let index = 0; index < batch.length; index++) {
 
-        const snap = snaps[index];
+    const user = batch[index];
+    const snap = snaps[index];
 
-        // 🚫 Skip invalid users
-        if (
-            !user?.userId ||
-            user.prizeAmount <= 0 ||
-            user.registeredId === "customUser" ||
-            !snap ||
-            !snap.exists()
-        ) {
-            if (!snap || !snap.exists()) {
-                console.log("⏭️ Skipping invalid user:", user?.userId);
-            }
-            return;
+    // 🚫 Skip invalid users
+    if (
+        !user?.userId ||
+        user.prizeAmount <= 0 ||
+        user.registeredId === "customUser" ||
+        !snap ||
+        !snap.exists()
+    ) {
+        if (!snap || !snap.exists()) {
+            console.log("⏭️ Skipping invalid user:", user?.userId);
+        }
+        continue;
+    }
+
+    const userRefPath = `users/${user.userId}`;
+    const resultKey = String(endTime);
+    const processedPath = `${userRefPath}/processedResults/${type}/${resultKey}`;
+
+    try {
+        const lock = await db.ref(processedPath).transaction((current) => {
+            if (current === true) return;
+            return true;
+        });
+
+        if (!lock.committed) continue;
+
+        updates[processedPath] = true;
+
+        if (type === "250rs") {
+            updates[`${userRefPath}/totalEarningFromRiseRewards121rs`] =
+                admin.database.ServerValue.increment(user.prizeAmount);
         }
 
-        const userRefPath = `users/${user.userId}`;
-        const resultKey = String(endTime);
-        const processedPath = `${userRefPath}/processedResults/${type}/${resultKey}`;
-
-        try {
-            // ✅ Prevent duplicate reward
-            const lock = await db.ref(processedPath).transaction((current) => {
-                if (current === true) return;
-                return true;
-            });
-
-            if (!lock.committed) return;
-            updates[processedPath] = true;
-            // ✅ Add to batch updates (NOT per user write)
-            if (type === "250rs") {
-                updates[`${userRefPath}/totalEarningFromRiseRewards121rs`] =
-                    admin.database.ServerValue.increment(user.prizeAmount);
-            }
-
-            if (type === "10000rs") {
-                updates[`${userRefPath}/totalEarningFromRiseRewards10K`] =
-                    admin.database.ServerValue.increment(user.prizeAmount);
-            }
-
-        } catch (err) {
-            console.error("❌ Update failed:", user.userId);
+        if (type === "10000rs") {
+            updates[`${userRefPath}/totalEarningFromRiseRewards10K`] =
+                admin.database.ServerValue.increment(user.prizeAmount);
         }
-    }));
+
+    } catch (err) {
+        console.error("❌ Update failed:", user.userId);
+    }
+}
 
     // ✅ SINGLE WRITE PER BATCH (VERY FAST 🚀)
     if (Object.keys(updates).length > 0) {
