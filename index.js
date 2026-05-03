@@ -559,16 +559,23 @@ for (let i = 0; i < users.length; i += BATCH_SIZE) {
     const snap = snaps[index];
 
     // 🚫 Skip invalid users
-    if (
-        !user?.userId ||
-        user.prizeAmount <= 0 ||
-        user.registeredId === "customUser" ||
-        !snap ||
-        !snap.exists()
-    ) {
-        if (!snap || !snap.exists()) {
-            console.log("⏭️ Skipping invalid user:", user?.userId);
-        }
+        if (!user?.userId) {
+        console.log("⚠️ Skipped payment: Missing userId");
+        continue;
+    }
+
+    if (user.prizeAmount <= 0) {
+        console.log("⚠️ Skipped payment (zero prize):", user.userId);
+        continue;
+    }
+
+    if (user.registeredId === "customUser") {
+        console.log("⚠️ Skipped payment (custom user):", user.userId);
+        continue;
+    }
+
+    if (!snap || !snap.exists()) {
+        console.log("⚠️ Skipped payment (user not found in DB):", user.userId);
         continue;
     }
 
@@ -583,24 +590,8 @@ for (let i = 0; i < users.length; i += BATCH_SIZE) {
 });
 
 if (!lock.committed) {
-
-    const currentUser = snap.val() || {};
-
-    let currentEarning = 0;
-
-    if (type === "250rs") {
-        currentEarning = currentUser.totalEarningFromRiseRewards121rs || 0;
-    }
-
-    if (type === "10000rs") {
-        currentEarning = currentUser.totalEarningFromRiseRewards10K || 0;
-    }
-
-   if (lock.snapshot.val() === true) {
-        updates[processedPath] = true;
-    }
-
-    continue; 
+    console.log("⚠️ Skipped payment (already processed):", user.userId);
+    continue;
 }
 
         //updates[processedPath] = true;
